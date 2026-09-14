@@ -1,0 +1,2415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Balangiga ResQ - Disaster Response</title>
+
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Leaflet Maps CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    :root {
+      --primary: #ef4444;
+      --primary-dark: #dc2626;
+      --primary-light: #fef2f2;
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --surface-border: #e2e8f0;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --warning: #f59e0b;
+      --warning-light: #fffbeb;
+      --success: #10b981;
+      --success-light: #ecfdf5;
+      --info: #0284c7;
+      --info-light: #f0f9ff;
+      --radius: 16px;
+      --radius-sm: 10px;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
+      --shadow-md: 0 4px 12px -2px rgba(0,0,0,0.08);
+      --shadow-lg: 0 10px 25px -5px rgba(0,0,0,0.12);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+    body { background-color: var(--bg); color: var(--text-main); display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+    /* Header */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--surface-border);
+      padding: 14px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 100;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .brand-icon { background: var(--primary-light); color: var(--primary); padding: 8px; border-radius: var(--radius-sm); display: flex; }
+    .brand h1 { font-size: 1.05rem; font-weight: 700; letter-spacing: -0.02em; }
+    .brand p { font-size: 0.75rem; color: var(--text-muted); }
+    
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--success-light);
+      color: var(--success);
+      padding: 6px 12px;
+      border-radius: 99px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .pulse-dot { width: 8px; height: 8px; background: var(--success); border-radius: 50%; animation: pulse 2s infinite; }
+    @keyframes pulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(1.2); } 100% { opacity: 1; transform: scale(1); } }
+
+    /* Main Container */
+    .main-viewport { flex: 1; position: relative; overflow: hidden; }
+    .tab-content { display: none; height: 100%; overflow-y: auto; padding: 20px; padding-bottom: 90px; }
+    .tab-content.active { display: block; }
+
+    /* Bottom Mobile Navigation */
+    nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(12px);
+      border-top: 1px solid var(--surface-border);
+      display: flex;
+      justify-content: space-around;
+      padding: 8px 0 16px 0;
+      z-index: 1000;
+    }
+    nav button {
+      background: none;
+      border: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      color: var(--text-muted);
+      font-size: 0.7rem;
+      font-weight: 500;
+      cursor: pointer;
+      width: 20%;
+      transition: color 0.2s ease;
+    }
+    nav button.active { color: var(--primary); font-weight: 600; }
+    nav button i { width: 22px; height: 22px; }
+
+    /* Map UI */
+    #map-tab { padding: 0; position: relative; }
+    #map { width: 100%; height: 100%; z-index: 1; }
+
+    /* Map Overlays */
+    .map-hazard-alert {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      background: rgba(255,255,255,0.96);
+      border-left: 4px solid var(--warning);
+      padding: 9px 12px;
+      border-radius: 10px;
+      box-shadow: var(--shadow-md);
+      z-index: 500;
+      width: 260px;
+      font-size: 0.72rem;
+    }
+
+    .map-hazard-alert strong {
+      display: block;
+      margin-bottom: 3px;
+      color: #92400e;
+    }
+
+    .map-legend {
+      position: absolute;
+      top: 115px;
+      left: 14px;
+      background: rgba(255,255,255,0.96);
+      padding: 10px 12px;
+      border-radius: 10px;
+      box-shadow: var(--shadow-md);
+      z-index: 500;
+      width: 170px;
+      font-size: 0.68rem;
+    }
+
+    .map-legend-title {
+      font-weight: 700;
+      font-size: 0.72rem;
+      margin-bottom: 7px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin: 5px 0;
+      color: var(--text-muted);
+    }
+
+    .legend-color {
+      width: 13px;
+      height: 13px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+
+    .map-location-btn {
+      position: absolute;
+      right: 16px;
+      bottom: 170px;
+      width: 42px;
+      height: 42px;
+      border: none;
+      border-radius: 12px;
+      background: white;
+      box-shadow: var(--shadow-md);
+      z-index: 500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    /* Map Controls */
+    .map-legend {
+    position: absolute;
+    top: 72px;
+    left: 16px;
+    background: rgba(255,255,255,0.96);
+    padding: 10px 12px;
+    border-radius: 12px;
+    box-shadow: var(--shadow-md);
+    z-index: 500;
+    font-size: 0.68rem;
+    width: 155px;
+  }
+
+  .map-legend-title {
+    font-weight: 700;
+    margin-bottom: 7px;
+    font-size: 0.72rem;
+    color: var(--text-main);
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin: 5px 0;
+    color: var(--text-muted);
+    line-height: 1.2;
+  }
+
+  .legend-color {
+    width: 13px;
+    height: 13px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+    .map-location-btn {
+      position: absolute;
+      right: 16px;
+      bottom: 170px;
+      width: 42px;
+      height: 42px;
+      border: none;
+      border-radius: 12px;
+      background: white;
+      box-shadow: var(--shadow-md);
+      z-index: 500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--text-main);
+    }
+
+    .map-location-btn:active {
+      transform: scale(0.95);
+    }
+
+    .map-hazard-alert {
+      position: absolute;
+      left: 16px;
+      right: 16px;
+      top: 16px;
+      background: rgba(255,255,255,0.95);
+      border-left: 4px solid var(--warning);
+      padding: 10px 14px;
+      border-radius: 12px;
+      box-shadow: var(--shadow-md);
+      z-index: 500;
+      font-size: 0.75rem;
+    }
+
+    .map-hazard-alert strong {
+      display: block;
+      margin-bottom: 2px;
+      color: #92400e;
+    }
+
+    .shelter-marker {
+      background: white;
+      border: 2px solid var(--info);
+      border-radius: 50%;
+      width: 34px;
+      height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.25);
+      color: var(--info);
+    }
+
+    .user-location-marker {
+      width: 18px;
+      height: 18px;
+      background: #2563eb;
+      border: 3px solid white;
+      border-radius: 50%;
+      box-shadow: 0 0 0 5px rgba(37,99,235,0.2);
+    }
+    
+    .floating-sos-card {
+      position: absolute;
+      bottom: 90px;
+      left: 16px;
+      right: 16px;
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.6);
+      padding: 14px 18px;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-lg);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 500;
+    }
+
+    /* Switch Component */
+    .switch-wrapper { display: flex; align-items: center; gap: 10px; }
+    .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #cbd5e1; transition: .3s; border-radius: 24px;
+    }
+    .slider:before {
+      position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px;
+      background-color: white; transition: .3s; border-radius: 50%;
+    }
+    input:checked + .slider { background-color: var(--primary); }
+    input:checked + .slider:before { transform: translateX(20px); }
+
+    .btn-emergency {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 10px 18px;
+      border-radius: var(--radius-sm);
+      font-weight: 600;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+      transition: all 0.2s ease;
+    }
+    .btn-emergency:disabled { background: #cbd5e1; box-shadow: none; cursor: not-allowed; opacity: 0.7; }
+    .btn-emergency:not(:disabled):active { transform: scale(0.97); }
+
+    /* Card System */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--radius);
+      padding: 18px;
+      margin-bottom: 14px;
+      box-shadow: var(--shadow-sm);
+    }
+    .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+    .card-title { font-size: 0.95rem; font-weight: 600; }
+
+    /* Form & Buttons */
+    .select-control, .textarea-control {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid var(--surface-border);
+      border-radius: var(--radius-sm);
+      background: var(--bg);
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .select-control:focus, .textarea-control:focus { border-color: var(--primary); background: var(--surface); }
+
+    .btn-secondary {
+      background: var(--bg);
+      border: 1px solid var(--surface-border);
+      color: var(--text-main);
+      padding: 8px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+    .btn-secondary:hover { background: var(--surface-border); }
+
+    .btn-checkin {
+      background: var(--info-light);
+      color: var(--info);
+      border: 1px solid rgba(2, 132, 199, 0.2);
+      padding: 8px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+    .btn-checkin.active {
+      background: var(--success);
+      color: white;
+      border-color: var(--success);
+    }
+
+    /* Alert Banners */
+    .alert-banner {
+      background: var(--warning-light);
+      border: 1px solid #fde68a;
+      border-left: 4px solid var(--warning);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-top: 14px;
+    }
+    .alert-banner h4 { color: #b45309; font-size: 0.95rem; display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .alert-banner p { color: #78350f; font-size: 0.85rem; line-height: 1.4; }
+
+    .user-status-card {
+      background: var(--info-light);
+      border: 1px solid rgba(2, 132, 199, 0.2);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* Progress Indicators */
+    .progress-bar-bg { width: 100%; height: 8px; background: #e2e8f0; border-radius: 99px; margin-top: 10px; overflow: hidden; }
+    .progress-bar-fill { height: 100%; border-radius: 99px; transition: width 0.4s ease, background-color 0.4s ease; }
+
+    /* Guides Filter Chips & Checklists */
+    .chip-group { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 16px; }
+    .chip {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      padding: 6px 14px;
+      border-radius: 99px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      white-space: nowrap;
+      cursor: pointer;
+      color: var(--text-muted);
+      transition: all 0.2s;
+    }
+    .chip.active { background: var(--text-main); color: white; border-color: var(--text-main); }
+
+    .checklist-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--surface-border);
+      cursor: pointer;
+    }
+    .checklist-item:last-child { border-bottom: none; }
+    .checklist-item input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--primary); }
+    .checklist-item.checked span { text-decoration: line-through; color: var(--text-muted); }
+
+    /* Step Cards */
+    .step-card {
+      display: flex;
+      gap: 14px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--surface-border);
+    }
+    .step-card:last-child { border-bottom: none; }
+    .step-number {
+      background: var(--primary-light);
+      color: var(--primary);
+      font-weight: 700;
+      font-size: 0.85rem;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .step-content h5 { font-size: 0.9rem; font-weight: 600; margin-bottom: 2px; }
+    .step-content p { font-size: 0.825rem; color: var(--text-muted); line-height: 1.4; }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <div class="brand-icon"><i data-lucide="shield-alert"></i></div>
+      <div>
+        <h1>Balangiga ResQ</h1>
+        <p>Eastern Samar Emergency Hub</p>
+      </div>
+    </div>
+    <div class="status-badge">
+      <div class="pulse-dot"></div>
+      Emergency Ready
+    </div>
+  </header>
+
+  <!-- Viewport -->
+  <div class="main-viewport">
+
+    <!-- 1. HAZARD MAP -->
+    <div id="map-tab" class="tab-content active">
+
+      <div id="map"></div>
+
+      <!-- Hazard Status -->
+      <div class="map-hazard-alert">
+        <strong>⚠️ Hazard Monitoring</strong>
+        <span id="mapHazardText">
+          Monitoring flood, coastal and landslide hazards across Balangiga.
+        </span>
+      </div>
+
+      <!-- Map Legend -->
+      <div class="map-legend">
+
+        <div class="map-legend-title">MAP LEGEND</div>
+
+        <div class="legend-item">
+          <span class="legend-color"
+                style="background:#38bdf8;"></span>
+          Flood Risk
+        </div>
+
+        <div class="legend-item">
+          <span class="legend-color"
+                style="background:#fb923c;"></span>
+          Storm Surge
+        </div>
+
+        <div class="legend-item">
+          <span class="legend-color"
+                style="background:#facc15;"></span>
+          Landslide Risk
+        </div>
+
+        <div class="legend-item">
+          <span class="legend-color"
+                style="background:white;border:2px solid #0284c7;"></span>
+          Evacuation Center
+        </div>
+
+        <div class="legend-item">
+          <span class="legend-color"
+                style="background:transparent;border:2px dashed #64748b;"></span>
+          Barangay Boundary
+        </div>
+
+        <div class="legend-item">
+          <span class="legend-color"
+                style="background:transparent;border:2px dashed #ef4444;"></span>
+          Balangiga Boundary
+        </div>
+
+      </div>
+
+      <!-- My Location -->
+      <button class="map-location-btn"
+              onclick="locateUser()"
+              title="My Location">
+
+        <i data-lucide="crosshair"
+          style="width:20px;height:20px;"></i>
+
+      </button>
+
+      <!-- SOS -->
+      <div class="floating-sos-card">
+
+        <div class="switch-wrapper">
+          <label class="switch">
+            <input type="checkbox"
+                  id="sosToggle"
+                  onchange="toggleSOS(this.checked)">
+            <span class="slider"></span>
+          </label>
+
+          <span style="font-size:0.85rem;font-weight:600;">
+            Opt-In SOS
+          </span>
+        </div>
+
+        <button id="sosBtn"
+                class="btn-emergency"
+                disabled
+                onclick="triggerSOS('Manual Opt-In SOS Signal Triggered')">
+
+          <i data-lucide="radio"
+            style="width:16px;height:16px;"></i>
+
+          TRIGGER SOS
+        </button>
+
+      </div>
+
+    </div>
+
+      <!-- Current Hazard Alert -->
+      <div class="map-hazard-alert">
+        <strong>⚠️ Current Hazard Status</strong>
+        <span id="mapHazardText">Monitoring flood and coastal hazard zones in Balangiga.</span>
+      </div>
+
+      <!-- Map Legend -->
+      <div class="map-legend">
+        <div class="map-legend-title">Map Legend</div>
+
+        <div class="legend-item">
+          <span class="legend-color" style="background:#38bdf8;"></span>
+          Flood Risk
+        </div>
+
+        <div class="legend-item">
+          <span class="legend-color" style="background:#fb923c;"></span>
+          Storm Surge
+        </div>
+
+        <div class="legend-item">
+          <span class="legend-color" style="background:#facc15;"></span>
+          Landslide Risk
+        </div>
+
+        <div class="legend-item">
+          <span class="legend-color" style="background:#ffffff;border:2px solid #0284c7;"></span>
+          Evacuation Center
+        </div>
+
+        <div class="legend-item">
+          <span class="legend-color" style="background:#ef4444;border:2px dashed #ef4444;"></span>
+          Balangiga Boundary
+        </div>
+      </div>
+
+      <!-- My Location -->
+      <button class="map-location-btn" onclick="locateUser()" title="My Location">
+        <i data-lucide="crosshair" style="width:20px;height:20px;"></i>
+      </button>
+
+      <!-- SOS -->
+      <div class="floating-sos-card">
+        <div class="switch-wrapper">
+          <label class="switch">
+            <input type="checkbox" id="sosToggle" onchange="toggleSOS(this.checked)">
+            <span class="slider"></span>
+          </label>
+
+          <span style="font-size:0.85rem;font-weight:600;">
+            Opt-In SOS
+          </span>
+        </div>
+
+        <button id="sosBtn"
+                class="btn-emergency"
+                disabled
+                onclick="triggerSOS('Manual Opt-In SOS Signal Triggered')">
+
+          <i data-lucide="radio" style="width:16px;height:16px;"></i>
+          TRIGGER SOS
+
+        </button>
+      </div>
+
+    </div>
+        <div class="switch-wrapper">
+          <label class="switch">
+            <input type="checkbox" id="sosToggle" onchange="toggleSOS(this.checked)">
+            <span class="slider"></span>
+          </label>
+          <span style="font-size: 0.85rem; font-weight: 600;">Opt-In SOS</span>
+        </div>
+        <button id="sosBtn" class="btn-emergency" disabled onclick="triggerSOS('Manual Opt-In SOS Signal Triggered')">
+          <i data-lucide="radio" style="width:16px; height:16px;"></i>
+          TRIGGER SOS
+        </button>
+      </div>
+    </div>
+
+    <!-- 2. BARANGAY ALERTS -->
+    <div id="alerts-tab" class="tab-content">
+      <div class="card">
+        <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 8px;">Pinned Location</label>
+        <select id="barangaySelect" class="select-control" onchange="updateBarangayAlert()">
+          <option value="Poblacion I">Barangay Poblacion I</option>
+          <option value="Poblacion II">Barangay Poblacion II</option>
+          <option value="Poblacion III">Barangay Poblacion III</option>
+          <option value="Poblacion IV">Barangay Poblacion IV</option>
+          <option value="Poblacion V">Barangay Poblacion V</option>
+          <option value="Poblacion VI">Barangay Poblacion VI</option>
+          <option value="Bacjao">Barangay Bacjao</option>
+          <option value="Cag-olango">Barangay Cag-olango</option>
+          <option value="Cansumangay">Barangay Cansumangay</option>
+          <option value="Guinmaayohan">Barangay Guinmaayohan</option>
+          <option value="Maybunga">Barangay Maybunga</option>
+          <option value="San Miguel">Barangay San Miguel</option>
+          <option value="Rosa">Barangay Rosa</option>
+        </select>
+      </div>
+
+      <div class="alert-banner" id="alertContent">
+        <h4><i data-lucide="cloud-lightning" style="width:18px; height:18px;"></i> Heavy Rainfall Alert - Signal No. 2</h4>
+        <p>Active storm system over Barangay Poblacion 01. Severe localized flooding along river channels and coastal storm surge risk expected within 12-24 hours.</p>
+      </div>
+    </div>
+
+    <!-- 3. EVACUATION CENTERS & CHECK-IN -->
+    <div id="shelters-tab" class="tab-content">
+      <div class="user-status-card" id="userCheckinStatus">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <i data-lucide="user-check" style="color:var(--info); width:20px;"></i>
+          <div>
+            <div style="font-size:0.85rem; font-weight:600;" id="statusTitle">Not Checked In</div>
+            <div style="font-size:0.75rem; color:var(--text-muted);" id="statusSub">Tap "Check In" below when you reach safety.</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <h3 style="font-size: 1.1rem; font-weight: 700;">Evacuation Centers</h3>
+        <span style="font-size:0.75rem; color:var(--text-muted);">Real-Time Capacity</span>
+      </div>
+
+      <div id="sheltersList">
+        <!-- Rendered dynamically by JavaScript -->
+      </div>
+    </div>
+
+    <!-- 4. SURVIVAL GUIDES & GO-BAG CHECKLIST -->
+    <div id="guides-tab" class="tab-content">
+      <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 12px;">Preparedness & Survival</h3>
+
+      <!-- Filter Chips -->
+      <div class="chip-group">
+        <button class="chip active" onclick="filterGuides('all', this)">All Guides</button>
+        <button class="chip" onclick="filterGuides('gobag', this)">🎒 Go-Bag Checklist</button>
+        <button class="chip" onclick="filterGuides('surge', this)">🌊 Storm Surge</button>
+        <button class="chip" onclick="filterGuides('firstaid', this)">🩹 First Aid</button>
+        <button class="chip" onclick="filterGuides('hotlines', this)">📞 Hotlines</button>
+      </div>
+
+      <!-- Section: Go-Bag Checklist -->
+      <div class="card guide-section" id="guide-gobag">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Emergency Go-Bag Checklist</div>
+            <p style="font-size:0.75rem; color:var(--text-muted);">Essential items to pack before evacuating</p>
+          </div>
+          <span style="font-size:0.75rem; font-weight:600; color:var(--info);" id="gobagProgress">0/6 Packed</span>
+        </div>
+        
+        <div id="checklistContainer">
+          <label class="checklist-item" onclick="toggleGoBag('item1')">
+            <input type="checkbox" id="item1">
+            <span style="font-size:0.85rem;">4 Liters of clean drinking water (per person)</span>
+          </label>
+          <label class="checklist-item" onclick="toggleGoBag('item2')">
+            <input type="checkbox" id="item2">
+            <span style="font-size:0.85rem;">Ready-to-eat non-perishable canned food (3-day supply)</span>
+          </label>
+          <label class="checklist-item" onclick="toggleGoBag('item3')">
+            <input type="checkbox" id="item3">
+            <span style="font-size:0.85rem;">Flashlight with extra fresh batteries</span>
+          </label>
+          <label class="checklist-item" onclick="toggleGoBag('item4')">
+            <input type="checkbox" id="item4">
+            <span style="font-size:0.85rem;">Important legal IDs & documents sealed in waterproof pouch</span>
+          </label>
+          <label class="checklist-item" onclick="toggleGoBag('item5')">
+            <input type="checkbox" id="item5">
+            <span style="font-size:0.85rem;">First aid kit with maintenance medications</span>
+          </label>
+          <label class="checklist-item" onclick="toggleGoBag('item6')">
+            <input type="checkbox" id="item6">
+            <span style="font-size:0.85rem;">Power bank, extra phone cables & emergency whistle</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Section: Storm Surge Protocol -->
+      <div class="card guide-section" id="guide-surge">
+        <div class="card-title" style="margin-bottom:12px;">Storm Surge Protocol</div>
+        
+        <div class="step-card">
+          <div class="step-number">1</div>
+          <div class="step-content">
+            <h5>Evacuate Coastal Areas Immediately</h5>
+            <p>If coastal water levels recede abnormally or storm surge alert Level 2 is issued, move to high ground right away.</p>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <h5>Shut Off Main Utilities</h5>
+            <p>Disconnect main electrical breakers and gas tanks to prevent electrocution or post-storm fires.</p>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-number">3</div>
+          <div class="step-content">
+            <h5>Seek High Elevation Structures</h5>
+            <p>If trapped, move to the 2nd floor or reinforced concrete concrete structure like Southern Samar National Comprehensive HS.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section: First Aid -->
+      <div class="card guide-section" id="guide-firstaid">
+        <div class="card-title" style="margin-bottom:12px;">First Aid Fundamentals</div>
+        
+        <div class="step-card">
+          <div class="step-number">1</div>
+          <div class="step-content">
+            <h5>Severe Bleeding</h5>
+            <p>Apply firm, direct pressure on the wound using a clean cloth or bandage. Keep pressure steady for at least 10 minutes.</p>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <h5>Water Disinfection</h5>
+            <p>If boiling is impossible, add 2 drops of unscented household bleach per 1 liter of water and let sit for 30 minutes before drinking.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section: Hotlines -->
+      <div class="card guide-section" id="guide-hotlines">
+        <div class="card-title" style="margin-bottom:12px;">Balangiga LGU Emergency Hotlines</div>
+        
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <a href="tel:09170000000" class="btn-secondary" style="text-decoration:none; justify-content:space-between;">
+            <span><i data-lucide="phone-call" style="width:16px;"></i> MDRRMO Hotline</span>
+            <span style="color:var(--info);">0917-000-0000</span>
+          </a>
+          <a href="tel:09180000000" class="btn-secondary" style="text-decoration:none; justify-content:space-between;">
+            <span><i data-lucide="shield" style="width:16px;"></i> Municipal Police Station</span>
+            <span style="color:var(--info);">0918-000-0000</span>
+          </a>
+          <a href="tel:09200000000" class="btn-secondary" style="text-decoration:none; justify-content:space-between;">
+            <span><i data-lucide="flame" style="width:16px;"></i> BFP Fire Station</span>
+            <span style="color:var(--info);">0920-000-0000</span>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. COMMUNITY REPORT -->
+    <div id="report-tab" class="tab-content">
+      <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 14px;">Submit Citizen Incident Report</h3>
+      
+      <div class="card">
+        <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 8px;">Report Details</label>
+        <textarea id="reportText" class="textarea-control" rows="4" placeholder="Describe environmental hazards (e.g. Fallen electric post or landslide blocking Brgy. Cansumangca road)..."></textarea>
+        
+        <button class="btn-emergency" style="width: 100%; margin-top: 14px; justify-content: center; background: var(--text-main);" onclick="submitReport()">
+          <i data-lucide="send" style="width:16px; height:16px;"></i> Send Incident Report
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Bottom Navigation -->
+  <nav>
+    <button class="active" onclick="showTab('map-tab', this)">
+      <i data-lucide="map-pin"></i> Map
+    </button>
+    <button onclick="showTab('alerts-tab', this)">
+      <i data-lucide="bell"></i> Alerts
+    </button>
+    <button onclick="showTab('shelters-tab', this)">
+      <i data-lucide="building-2"></i> Shelters
+    </button>
+    <button onclick="showTab('guides-tab', this)">
+      <i data-lucide="book-open"></i> Guides
+    </button>
+    <button onclick="showTab('report-tab', this)">
+      <i data-lucide="message-square-warning"></i> Report
+    </button>
+  </nav>
+
+  <!-- Leaflet Maps Engine Script -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@7/turf.min.js"></script>
+  
+
+  <script>
+    // Initialize Lucide Icons
+    lucide.createIcons();
+
+    let map;
+
+    // --- State Management ---
+    let sheltersData = [
+      { id: 'muni', name: 'Balangiga Municipal Hall', location: 'Poblacion', current: 85, max: 100 },
+      { id: 'ssnchs', name: 'Southern Samar National Comp. HS', location: 'San Fernando', current: 120, max: 500 },
+      { id: 'bces', name: 'Balangiga Central Elem. School', location: 'Poblacion', current: 249, max: 250 }
+    ];
+
+    let userCheckedInId = localStorage.getItem('userCheckedInId') || null;
+
+    // --- Navigation ---
+    function showTab(tabId, btn) {
+      document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+      document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+      
+      document.getElementById(tabId).classList.add('active');
+      btn.classList.add('active');
+
+      if (tabId === 'map-tab' && map) {
+        setTimeout(() => map.invalidateSize(), 100);
+      }
+    }
+
+    // =====================================================
+    // BALANGIGA RESQ MAP
+    // =====================================================
+
+    let balangigaBoundaryLayer = null;
+    let barangayBoundaryLayer = null;
+
+    let floodLayer = null;
+    let stormSurgeLayer = null;
+    let landslideLayer = null;
+    let shelterLayer = null;
+
+    let userLocationMarker = null;
+    let layerControl = null;
+
+
+    // -----------------------------------------------------
+    // BARANGAY RISK PROFILES
+    // -----------------------------------------------------
+
+    function getBarangayRiskProfile(barangay) {
+
+      const profiles = {
+
+        "Bacjao": [
+          "Heavy rainfall",
+          "Rain-induced landslide",
+          "Localized flooding",
+          "Typhoon winds"
+        ],
+
+        "Cag-olango": [
+          "Heavy rainfall",
+          "Rain-induced landslide",
+          "Localized flooding",
+          "Typhoon winds"
+        ],
+
+        "Cansumangcay": [
+          "Heavy rainfall",
+          "Rain-induced landslide",
+          "Localized flooding",
+          "Typhoon winds"
+        ],
+
+        "Guinmaayohan": [
+          "Heavy rainfall",
+          "Rain-induced landslide",
+          "Localized flooding",
+          "Typhoon winds"
+        ],
+
+        "Poblacion I": [
+          "River flooding",
+          "Coastal flooding",
+          "Storm surge",
+          "Tsunami"
+        ],
+
+        "Poblacion II": [
+          "River flooding",
+          "Coastal flooding",
+          "Storm surge",
+          "Tsunami"
+        ],
+
+        "Poblacion III": [
+          "River flooding",
+          "Coastal flooding",
+          "Storm surge",
+          "Tsunami"
+        ],
+
+        "Poblacion IV": [
+          "River flooding",
+          "Coastal flooding",
+          "Storm surge",
+          "Tsunami"
+        ],
+
+        "Poblacion V": [
+          "River flooding",
+          "Coastal flooding",
+          "Storm surge",
+          "Tsunami"
+        ],
+
+        "Poblacion VI": [
+          "River flooding",
+          "Coastal flooding",
+          "Storm surge",
+          "Tsunami"
+        ],
+
+        "San Miguel": [
+          "River flooding",
+          "Coastal flooding",
+          "Storm surge",
+          "Tsunami"
+        ],
+
+        "Santa Rosa": [
+          "Heavy rainfall",
+          "Rain-induced landslide",
+          "Localized flooding",
+          "Typhoon winds"
+        ],
+
+        "Maybunga": [
+          "Heavy rainfall",
+          "Localized flooding",
+          "Typhoon winds"
+        ]
+
+      };
+
+      return profiles[barangay] || [
+        "Heavy rainfall",
+        "Typhoon winds"
+      ];
+    }
+
+    // ---------------------------------------------------------
+    // LOAD OFFICIAL HAZARD DATA
+    // AND CLIP IT TO BALANGIGA
+    // ---------------------------------------------------------
+
+    function loadOfficialHazardLayers(boundaryLayer) {
+
+      console.log('Loading official hazard layers...');
+
+
+      // -------------------------------------------------------
+      // Get Balangiga boundary as GeoJSON
+      // -------------------------------------------------------
+
+      const boundaryGeoJSON =
+        boundaryLayer.toGeoJSON();
+
+
+      // -------------------------------------------------------
+      // Clip any hazard polygon to Balangiga
+      // -------------------------------------------------------
+
+      function clipToBalangiga(feature) {
+
+        try {
+
+          const boundary =
+            boundaryGeoJSON.features[0];
+
+
+          if (!boundary) {
+            return null;
+          }
+
+
+          return turf.intersect(
+            turf.featureCollection([
+              feature,
+              boundary
+            ])
+          );
+
+        } catch (error) {
+
+          console.warn(
+            'Could not clip hazard:',
+            error
+          );
+
+          return null;
+        }
+
+      }
+
+
+      // -------------------------------------------------------
+      // Use the BOUNDING BOX only for downloading data.
+      //
+      // Turf will later cut the returned polygons
+      // to the exact Balangiga boundary.
+      // -------------------------------------------------------
+
+      const bounds =
+        boundaryLayer.getBounds();
+
+
+      const west =
+        bounds.getWest();
+
+      const south =
+        bounds.getSouth();
+
+      const east =
+        bounds.getEast();
+
+      const north =
+        bounds.getNorth();
+
+
+      // -------------------------------------------------------
+      // ArcGIS query helper
+      // -------------------------------------------------------
+
+      function queryArcGIS(serviceURL) {
+
+        return new Promise((resolve, reject) => {
+
+          const callbackName =
+            'arcgisCallback_' +
+            Date.now() +
+            '_' +
+            Math.floor(Math.random() * 100000);
+
+          const params =
+            new URLSearchParams({
+              where: '1=1',
+
+              geometry:
+                `${west},${south},${east},${north}`,
+
+              geometryType:
+                'esriGeometryEnvelope',
+
+              inSR:
+                '4326',
+
+              spatialRel:
+                'esriSpatialRelIntersects',
+
+              outFields:
+                '*',
+
+              returnGeometry:
+                'true',
+
+              outSR:
+                '4326',
+
+              f:
+                'json',
+
+              callback:
+                callbackName
+            });
+
+          console.log(
+            'Requesting GIS JSONP:',
+            serviceURL
+          );
+
+          let script;
+
+          window[callbackName] =
+            function(data) {
+
+              delete window[callbackName];
+
+              if (script) {
+                script.remove();
+              }
+
+              if (data.error) {
+                reject(
+                  new Error(
+                    data.error.message ||
+                    'ArcGIS returned an error'
+                  )
+                );
+                return;
+              }
+
+              // ---------------------------------------------------
+              // CONVERT ARCGIS JSON FEATURES TO GEOJSON
+              // ---------------------------------------------------
+
+              if (
+                data.features &&
+                data.features.length > 0
+              ) {
+
+                data.features =
+                  data.features
+                    .map(feature => {
+
+                      if (
+                        !feature.geometry
+                      ) {
+                        return null;
+                      }
+
+                      const geometry =
+                        feature.geometry;
+
+                      // ArcGIS Polygon
+                      if (
+                        geometry.rings
+                      ) {
+
+                        return {
+                          type: 'Feature',
+
+                          properties:
+                            feature.attributes || {},
+
+                          geometry: {
+                            type: 'Polygon',
+                            coordinates:
+                              geometry.rings
+                          }
+                        };
+
+                      }
+
+                      // ArcGIS Polyline
+                      if (
+                        geometry.paths
+                      ) {
+
+                        return {
+                          type: 'Feature',
+
+                          properties:
+                            feature.attributes || {},
+
+                          geometry: {
+                            type: 'MultiLineString',
+                            coordinates:
+                              geometry.paths
+                          }
+                        };
+
+                      }
+
+                      // ArcGIS Point
+                      if (
+                        geometry.x !== undefined &&
+                        geometry.y !== undefined
+                      ) {
+
+                        return {
+                          type: 'Feature',
+
+                          properties:
+                            feature.attributes || {},
+
+                          geometry: {
+                            type: 'Point',
+                            coordinates: [
+                              geometry.x,
+                              geometry.y
+                            ]
+                          }
+                        };
+
+                      }
+
+                      console.warn(
+                        'Unknown ArcGIS geometry:',
+                        geometry
+                      );
+
+                      return null;
+
+                    })
+                    .filter(Boolean);
+
+                console.log(
+                  'Converted ArcGIS features to GeoJSON:',
+                  data.features.length
+                );
+              }
+
+              resolve(data);
+            };
+
+          script =
+            document.createElement('script');
+
+          script.src =
+            serviceURL +
+            '/query?' +
+            params.toString();
+
+          script.onerror =
+            function() {
+
+              delete window[callbackName];
+
+              if (script) {
+                script.remove();
+              }
+
+              reject(
+                new Error(
+                  'ArcGIS JSONP request failed'
+                )
+              );
+
+            };
+
+          document.body.appendChild(script);
+
+        });
+
+      }
+
+
+      // =======================================================
+      // FLOOD
+      // =======================================================
+
+      const floodURL =
+        'https://controlmap.mgb.gov.ph/arcgis/rest/services/GeospatialDataInventory/GDI_Detailed_Flood_Susceptibility/MapServer/0';
+
+
+      queryArcGIS(floodURL)
+
+        .then(data => {
+
+          console.log(
+            'Flood features:',
+            data.features?.length || 0
+          );
+
+
+          if (
+            !data.features ||
+            data.features.length === 0
+          ) {
+
+            console.warn(
+              'No flood data returned.'
+            );
+
+            return;
+
+          }
+
+
+          data.features.forEach(feature => {
+
+            const clipped =
+              clipToBalangiga(feature);
+
+
+            if (!clipped) {
+              return;
+            }
+
+
+            const level =
+              feature.properties?.FloodSusc;
+
+
+            let fillColor =
+              '#facc15';
+
+
+            if (level === 'VHF') {
+
+              fillColor =
+                '#dc2626';
+
+            }
+
+            else if (level === 'HF') {
+
+              fillColor =
+                '#f97316';
+
+            }
+
+            else if (level === 'MF') {
+
+              fillColor =
+                '#facc15';
+
+            }
+
+            else if (level === 'LF') {
+
+              fillColor =
+                '#86efac';
+
+            }
+
+
+            L.geoJSON(
+              clipped,
+              {
+
+                style: {
+
+                  color:
+                    '#b45309',
+
+                  weight:
+                    1,
+
+                  fillColor:
+                    fillColor,
+
+                  fillOpacity:
+                    0.45
+
+                },
+
+
+                onEachFeature:
+                  function(
+                    feature,
+                    layer
+                  ) {
+
+                    layer.bindPopup(`
+                      <b>Official MGB Flood Susceptibility</b><br>
+                      Classification:
+                      ${level || 'Unknown'}
+                    `);
+
+                  }
+
+              }
+
+            ).addTo(
+              floodLayer
+            );
+
+          });
+
+
+          console.log(
+            'Official flood layer loaded.'
+          );
+
+        })
+
+
+        .catch(error => {
+
+          console.error(
+            'FLOOD ERROR:',
+            error
+          );
+
+        });
+
+
+      // =======================================================
+      // LANDSLIDE
+      // =======================================================
+
+      const landslideURL =
+        'https://controlmap.mgb.gov.ph/arcgis/rest/services/GeospatialDataInventory/GDI_Detailed_Rain_induced_Landslide_Susceptibility/MapServer/0';
+
+
+      queryArcGIS(landslideURL)
+
+        .then(data => {
+
+          console.log(
+            'Landslide features:',
+            data.features?.length || 0
+          );
+
+
+          if (
+            !data.features ||
+            data.features.length === 0
+          ) {
+
+            console.warn(
+              'No landslide data returned.'
+            );
+
+            return;
+
+          }
+
+
+          data.features.forEach(feature => {
+
+            const clipped =
+              clipToBalangiga(feature);
+
+
+            if (!clipped) {
+              return;
+            }
+
+
+            const level =
+              feature.properties?.LndslideSusc;
+
+
+            let fillColor =
+              '#facc15';
+
+
+            if (level === 'VHL') {
+
+              fillColor =
+                '#dc2626';
+
+            }
+
+            else if (level === 'HL') {
+
+              fillColor =
+                '#f97316';
+
+            }
+
+            else if (level === 'ML') {
+
+              fillColor =
+                '#facc15';
+
+            }
+
+            else if (level === 'LL') {
+
+              fillColor =
+                '#86efac';
+
+            }
+
+            else if (level === 'DF') {
+
+              fillColor =
+                '#a855f7';
+
+            }
+
+
+            L.geoJSON(
+              clipped,
+              {
+
+                style: {
+
+                  color:
+                    '#a16207',
+
+                  weight:
+                    1,
+
+                  fillColor:
+                    fillColor,
+
+                  fillOpacity:
+                    0.45
+
+                },
+
+
+                onEachFeature:
+                  function(
+                    feature,
+                    layer
+                  ) {
+
+                    layer.bindPopup(`
+                      <b>Official MGB Rain-Induced Landslide Susceptibility</b><br>
+                      Classification:
+                      ${level || 'Unknown'}
+                    `);
+
+                  }
+
+              }
+
+            ).addTo(
+              landslideLayer
+            );
+
+          });
+
+
+          console.log(
+            'Official landslide layer loaded.'
+          );
+
+        })
+
+
+        .catch(error => {
+
+          console.error(
+            'LANDSLIDE ERROR:',
+            error
+          );
+
+        });
+
+
+      // =======================================================
+      // STORM SURGE
+      // =======================================================
+
+      const stormSurgeURLs = [
+
+        {
+          url:
+            'https://services1.arcgis.com/IwZZTMxZCmAmFYvF/arcgis/rest/services/Storm_Surge_Hazard_Map/FeatureServer/1',
+
+          name:
+            'Storm Surge 2.01–3m'
+        },
+
+        {
+          url:
+            'https://services1.arcgis.com/IwZZTMxZCmAmFYvF/arcgis/rest/services/Storm_Surge_Hazard_Map/FeatureServer/2',
+
+          name:
+            'Storm Surge 3.01–4m'
+        },
+
+        {
+          url:
+            'https://services1.arcgis.com/IwZZTMxZCmAmFYvF/arcgis/rest/services/Storm_Surge_Hazard_Map/FeatureServer/3',
+
+          name:
+            'Storm Surge 4.01–5m'
+        },
+
+        {
+          url:
+            'https://services1.arcgis.com/IwZZTMxZCmAmFYvF/arcgis/rest/services/Storm_Surge_Hazard_Map/FeatureServer/4',
+
+          name:
+            'Storm Surge 5m+'
+        }
+
+      ];
+
+
+      stormSurgeURLs.forEach(
+        stormInfo => {
+
+
+          queryArcGIS(
+            stormInfo.url
+          )
+
+          .then(data => {
+
+            console.log(
+              stormInfo.name,
+              'features:',
+              data.features?.length || 0
+            );
+
+
+            if (
+              !data.features ||
+              data.features.length === 0
+            ) {
+
+              return;
+
+            }
+
+
+            data.features.forEach(
+              feature => {
+
+
+                const clipped =
+                  clipToBalangiga(
+                    feature
+                  );
+
+
+                if (!clipped) {
+                  return;
+                }
+
+
+                const hazard =
+                  feature.properties?.HAZ;
+
+
+                let fillColor =
+                  '#38bdf8';
+
+
+                if (hazard === 1) {
+
+                  fillColor =
+                    '#93c5fd';
+
+                }
+
+                else if (hazard === 2) {
+
+                  fillColor =
+                    '#38bdf8';
+
+                }
+
+                else if (hazard === 3) {
+
+                  fillColor =
+                    '#2563eb';
+
+                }
+
+
+                L.geoJSON(
+                  clipped,
+                  {
+
+                    style: {
+
+                      color:
+                        '#0369a1',
+
+                      weight:
+                        1,
+
+                      fillColor:
+                        fillColor,
+
+                      fillOpacity:
+                        0.50
+
+                    },
+
+
+                    onEachFeature:
+                      function(
+                        feature,
+                        layer
+                      ) {
+
+                        layer.bindPopup(`
+                          <b>${stormInfo.name}</b><br>
+                          Hazard Level:
+                          ${hazard || 'Unknown'}
+                        `);
+
+                      }
+
+                  }
+
+                ).addTo(
+                  stormSurgeLayer
+                );
+
+
+              }
+
+            );
+
+
+            console.log(
+              stormInfo.name +
+              ' loaded.'
+            );
+
+
+          })
+
+          .catch(error => {
+
+            console.error(
+              'STORM SURGE ERROR:',
+              stormInfo.name,
+              error
+            );
+
+          });
+
+        }
+
+      );
+
+    }
+
+    // -----------------------------------------------------
+    // MAP INITIALIZATION
+    // -----------------------------------------------------
+
+    window.onload = function() {
+
+      const balangiga = [11.1105, 125.3833];
+
+      map = L.map('map', {
+        zoomControl: false,
+        minZoom: 12,
+        maxZoom: 18
+      }).setView(balangiga, 14);
+
+      L.control.zoom({
+        position: 'bottomright'
+      }).addTo(map);
+
+
+      // ---------------------------------------------------
+      // BASE MAP
+      // ---------------------------------------------------
+
+      L.tileLayer(
+        'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        {
+          maxZoom: 19,
+          attribution: '&copy; OpenStreetMap contributors'
+        }
+      ).addTo(map);
+
+
+      // ---------------------------------------------------
+      // EVACUATION CENTERS
+      // ---------------------------------------------------
+
+      shelterLayer = L.layerGroup();
+
+      const shelterIcon = L.divIcon({
+
+        className: '',
+
+        html: `
+          <div class="shelter-marker">
+            <i data-lucide="building-2"
+              style="width:18px;height:18px;">
+            </i>
+          </div>
+        `,
+
+        iconSize: [34,34],
+        iconAnchor: [17,17]
+
+      });
+
+
+      L.marker(
+        [11.10917, 125.38636],
+        { icon: shelterIcon }
+      )
+      .bindPopup(`
+        <b>Balangiga Municipal Hall</b><br>
+        Evacuation Center<br>
+        Capacity: 85 / 100
+      `)
+      .addTo(shelterLayer);
+
+
+      L.marker(
+        [11.11962, 125.38982],
+        { icon: shelterIcon }
+      )
+      .bindPopup(`
+        <b>Southern Samar National Comprehensive HS</b><br>
+        Evacuation Center<br>
+        Capacity: 120 / 500
+      `)
+      .addTo(shelterLayer);
+
+
+      L.marker(
+        [11.10956, 125.38812],
+        { icon: shelterIcon }
+      )
+      .bindPopup(`
+        <b>Balangiga Central Elementary School</b><br>
+        Evacuation Center<br>
+        Capacity: 249 / 250
+      `)
+      .addTo(shelterLayer);
+
+      shelterLayer.addTo(map);
+
+      // ---------------------------------------------------
+      // OFFICIAL HAZARD LAYERS
+      // ---------------------------------------------------
+
+      floodLayer = L.layerGroup();
+      stormSurgeLayer = L.layerGroup();
+      landslideLayer = L.layerGroup();
+
+
+      // ---------------------------------------------------
+      // OFFICIAL BALANGIGA MUNICIPAL BOUNDARY
+      // ---------------------------------------------------
+
+      const boundaryURL =
+        'https://ulap-nga.georisk.gov.ph/arcgis/rest/services/PSA/Municipal/MapServer/0/query' +
+        '?where=city_name%3D%27Balangiga%27' +
+        '&outFields=*' +
+        '&returnGeometry=true' +
+        '&outSR=4326' +
+        '&f=geojson';
+
+
+      fetch(boundaryURL)
+
+        .then(response => response.json())
+
+        .then(data => {
+
+          if (!data.features || data.features.length === 0) {
+            throw new Error('Balangiga boundary not found');
+          }
+
+          balangigaBoundaryLayer = L.geoJSON(data, {
+
+            style: {
+              color: '#ef4444',
+              weight: 3,
+              dashArray: '7 5',
+              fillOpacity: 0
+            }
+
+          }).addTo(map);
+
+
+          const balangigaBounds =
+            balangigaBoundaryLayer.getBounds();
+
+
+          map.fitBounds(
+            balangigaBounds,
+            {
+              padding: [30,30]
+            }
+          );
+
+
+          // LOAD OFFICIAL HAZARD DATA
+          loadOfficialHazardLayers(
+            balangigaBoundaryLayer
+          );
+
+        })
+
+        .catch(error => {
+
+          console.warn(
+            'Could not load Balangiga boundary:',
+            error
+          );
+
+          map.setView(
+            balangiga,
+            14
+          );
+
+        });
+
+
+      // ---------------------------------------------------
+      // OFFICIAL 13 BARANGAY BOUNDARIES
+      // ---------------------------------------------------
+
+      const barangayURL =
+        'https://ulap-nga.georisk.gov.ph/arcgis/rest/services/PSA/BarangayPopMF/MapServer/0/query' +
+        '?where=city_name%3D%27Balangiga%27' +
+        '&outFields=brgy_name,city_name' +
+        '&returnGeometry=true' +
+        '&outSR=4326' +
+        '&f=geojson';
+
+
+      fetch(barangayURL)
+
+        .then(response => response.json())
+
+        .then(data => {
+
+          if (!data.features || data.features.length === 0) {
+            throw new Error('Barangay boundaries not found');
+          }
+
+
+          barangayBoundaryLayer = L.geoJSON(
+            data,
+            {
+
+              style: {
+                color: '#64748b',
+                weight: 1,
+                dashArray: '4 4',
+                fillOpacity: 0
+              },
+
+              onEachFeature: function(feature, layer) {
+
+                const barangay =
+                  feature.properties.brgy_name ||
+                  'Barangay';
+
+
+                const risks =
+                  getBarangayRiskProfile(barangay);
+
+
+                layer.bindPopup(`
+                  <b>${barangay}</b>
+                  <br><br>
+                  <b>Hazard Concerns</b><br>
+                  ${risks.map(r => `• ${r}`).join('<br>')}
+                  <br><br>
+                  <small>
+                    Prototype hazard profile.
+                  </small>
+                `);
+
+              }
+
+            }
+          );
+
+          if (layerControl) {
+            layerControl.addOverlay(
+              barangayBoundaryLayer,
+              '⬜ Barangay Boundaries'
+            );
+          }
+
+        })
+
+        .catch(error => {
+
+          console.warn(
+            'Could not load barangay boundaries:',
+            error
+          );
+
+        });
+
+
+      // ---------------------------------------------------
+      // LAYER CONTROL
+      // ---------------------------------------------------
+
+      const overlays = {
+
+        '🌊 Flood Risk': floodLayer,
+        '🟠 Storm Surge': stormSurgeLayer,
+        '🟡 Landslide Risk': landslideLayer,
+        '🏫 Evacuation Centers': shelterLayer
+
+      };
+
+
+      layerControl = L.control.layers(
+        null,
+        overlays,
+        {
+          collapsed: true,
+          position: 'topright'
+        }
+      ).addTo(map);
+
+
+      // ---------------------------------------------------
+      // INITIAL STATE
+      // ---------------------------------------------------
+
+      renderShelters();
+      initGoBagState();
+
+      setTimeout(() => {
+        lucide.createIcons();
+      }, 500);
+
+    };
+
+
+    // -----------------------------------------------------
+    // MY LOCATION
+    // -----------------------------------------------------
+
+    function locateUser() {
+
+      if (!navigator.geolocation) {
+
+        alert(
+          'Location services are not supported on this device.'
+        );
+
+        return;
+      }
+
+
+      navigator.geolocation.getCurrentPosition(
+
+        position => {
+
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+
+
+          if (userLocationMarker) {
+            map.removeLayer(userLocationMarker);
+          }
+
+
+          const userIcon = L.divIcon({
+
+            className: '',
+
+            html: `
+              <div style="
+                width:18px;
+                height:18px;
+                background:#2563eb;
+                border:3px solid white;
+                border-radius:50%;
+                box-shadow:0 0 0 5px rgba(37,99,235,0.2);
+              "></div>
+            `,
+
+            iconSize: [18,18],
+            iconAnchor: [9,9]
+
+          });
+
+
+          userLocationMarker = L.marker(
+            [lat,lng],
+            { icon:userIcon }
+          )
+          .addTo(map)
+          .bindPopup('<b>Your Current Location</b>')
+          .openPopup();
+
+
+          map.setView(
+            [lat,lng],
+            16
+          );
+
+        },
+
+        () => {
+
+          alert(
+            'Unable to access your location. Please check browser location permission.'
+          );
+
+        },
+
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 30000
+        }
+
+      );
+
+    }
+
+    // --- Shelter Check-In System ---
+    function renderShelters() {
+      const container = document.getElementById('sheltersList');
+      container.innerHTML = '';
+
+      const userStatusTitle = document.getElementById('statusTitle');
+      const userStatusSub = document.getElementById('statusSub');
+
+      let currentCheckedShelter = sheltersData.find(s => s.id === userCheckedInId);
+
+      if (currentCheckedShelter) {
+        userStatusTitle.innerHTML = `<span style="color:var(--success)">Checked In: ${currentCheckedShelter.name}</span>`;
+        userStatusSub.innerText = `Occupancy count updated. Tap "Check Out" if you leave.`;
+      } else {
+        userStatusTitle.innerText = "Not Checked In";
+        userStatusSub.innerText = "Tap 'Check In' below when you reach safety.";
+      }
+
+      sheltersData.forEach(shelter => {
+        const pct = Math.round((shelter.current / shelter.max) * 100);
+        
+        let color = 'var(--success)';
+        let statusText = `${pct}% Occupied`;
+        if (pct >= 80 && pct < 100) { color = 'var(--warning)'; }
+        else if (pct >= 100) { color = 'var(--primary)'; statusText = 'At Max Capacity'; }
+
+        const isUserHere = shelter.id === userCheckedInId;
+
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          <div class="card-header">
+            <div>
+              <div class="card-title">${shelter.name}</div>
+              <p style="font-size: 0.8rem; color: var(--text-muted);">${shelter.location} • Capacity: ${shelter.current} / ${shelter.max}</p>
+            </div>
+            <button class="btn-checkin ${isUserHere ? 'active' : ''}" onclick="toggleCheckIn('${shelter.id}')">
+              <i data-lucide="${isUserHere ? 'user-check' : 'user-plus'}" style="width:14px; height:14px;"></i>
+              ${isUserHere ? 'Checked In' : 'Check In'}
+            </button>
+          </div>
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" style="width: ${Math.min(pct, 100)}%; background: ${color};"></div>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+
+      lucide.createIcons();
+    }
+
+    function toggleCheckIn(shelterId) {
+      if (userCheckedInId === shelterId) {
+        // User is checking out of current shelter
+        let target = sheltersData.find(s => s.id === shelterId);
+        if (target && target.current > 0) target.current--;
+        userCheckedInId = null;
+      } else {
+        // Check out of previous shelter if checked in
+        if (userCheckedInId) {
+          let prev = sheltersData.find(s => s.id === userCheckedInId);
+          if (prev && prev.current > 0) prev.current--;
+        }
+        // Check in to new shelter
+        let target = sheltersData.find(s => s.id === shelterId);
+        if (target) {
+
+          if (target.current >= target.max) {
+            alert(
+              "This evacuation center is currently at full capacity. " +
+              "Please proceed to another available evacuation center."
+            );
+
+            renderShelters();
+            return;
+          }
+
+          target.current++;
+          userCheckedInId = shelterId;
+        }
+      }
+
+      localStorage.setItem('userCheckedInId', userCheckedInId || '');
+      renderShelters();
+    }
+
+    // --- Interactive Guides & Go-Bag System ---
+    function filterGuides(category, btn) {
+      document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
+
+      const sections = document.querySelectorAll('.guide-section');
+      sections.forEach(sec => {
+        if (category === 'all') {
+          sec.style.display = 'block';
+        } else {
+          sec.style.display = sec.id === `guide-${category}` ? 'block' : 'none';
+        }
+      });
+    }
+
+    function initGoBagState() {
+      for (let i = 1; i <= 6; i++) {
+        const isChecked = localStorage.getItem(`gobag_item${i}`) === 'true';
+        const checkbox = document.getElementById(`item${i}`);
+        if (checkbox) {
+          checkbox.checked = isChecked;
+          if (isChecked) checkbox.parentElement.classList.add('checked');
+        }
+      }
+      updateGoBagProgress();
+    }
+
+    function toggleGoBag(itemId) {
+      const checkbox = document.getElementById(itemId);
+      if (!checkbox) return;
+      
+      const isChecked = checkbox.checked;
+      checkbox.parentElement.classList.toggle('checked', isChecked);
+      localStorage.setItem(`gobag_${itemId}`, isChecked);
+      updateGoBagProgress();
+    }
+
+    function updateGoBagProgress() {
+      let count = 0;
+      for (let i = 1; i <= 6; i++) {
+        if (localStorage.getItem(`gobag_item${i}`) === 'true') count++;
+      }
+      document.getElementById('gobagProgress').innerText = `${count}/6 Packed`;
+    }
+
+    // --- SOS Functions ---
+    function toggleSOS(enabled) {
+      document.getElementById('sosBtn').disabled = !enabled;
+    }
+
+    // --- My Location ---
+    function locateUser() {
+
+      if (!navigator.geolocation) {
+        alert("Location services are not supported on this device.");
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+
+        (position) => {
+
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+
+          if (userLocationMarker) {
+            map.removeLayer(userLocationMarker);
+          }
+
+          const userIcon = L.divIcon({
+            className: '',
+            html: `<div class="user-location-marker"></div>`,
+            iconSize: [18, 18],
+            iconAnchor: [9, 9]
+          });
+
+          userLocationMarker = L.marker([lat, lng], {
+            icon: userIcon
+          })
+          .addTo(map)
+          .bindPopup("<b>Your Current Location</b>")
+          .openPopup();
+
+          map.setView([lat, lng], 16);
+
+        },
+
+        () => {
+          alert("Unable to access your location. Please check your browser location permission.");
+        },
+
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 30000
+        }
+
+      );
+    }
+
+    function triggerSOS(cause) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => alert(`${cause}\n\nGPS Coordinates Captured:\nLat: ${pos.coords.latitude}\nLong: ${pos.coords.longitude}\n\nBroadcasted to LGU emergency network!`),
+        () => alert(`${cause}\n\nCoordinates fallback: Lat: 11.1105, Long: 125.3833\n\nBroadcasted to LGU emergency network!`)
+      );
+    }
+
+    // Accelerometer Shake Detection
+    if (window.DeviceMotionEvent) {
+      window.addEventListener('devicemotion', (e) => {
+        let acc = e.accelerationIncludingGravity;
+        if (acc && (Math.abs(acc.x) > 22 || Math.abs(acc.y) > 22)) {
+          if (document.getElementById('sosToggle').checked) {
+            triggerSOS("Backup Shake Sensor Triggered!");
+          }
+        }
+      });
+    }
+
+    // Barangay Dropdown Logic
+    function updateBarangayAlert() {
+      const bgy = document.getElementById('barangaySelect').value;
+
+      document.getElementById('alertContent').innerHTML = `
+        <h4>
+          <i data-lucide="cloud-lightning"
+            style="width:18px;height:18px;"></i>
+          Heavy Rainfall Alert
+        </h4>
+
+        <p>
+          Monitoring hazard conditions for
+          <b>Barangay ${bgy}</b>.
+          Residents should monitor evacuation instructions
+          and avoid identified hazard zones.
+        </p>
+      `;
+
+      document.getElementById('mapHazardText').innerText =
+        `Hazard monitoring active for Barangay ${bgy}.`;
+
+      lucide.createIcons();
+
+      // Return to map and visually center the user on Balangiga
+      if (map) {
+        document.querySelector('[onclick*="map-tab"]').click();
+
+        setTimeout(() => {
+          map.invalidateSize();
+        }, 200);
+      }
+    }
+
+    // Form Submit
+    function submitReport() {
+      const val = document.getElementById('reportText').value;
+      if (val.trim() === "") return alert("Please enter report details first.");
+      alert("Report successfully saved to local queue!");
+      document.getElementById('reportText').value = "";
+    }
+  </script>
+</body>
+</html>
